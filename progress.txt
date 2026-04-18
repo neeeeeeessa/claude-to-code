@@ -1,0 +1,20 @@
+# Progress Log
+
+Append-only log of what each iteration attempted and the outcome. The
+operator reads this in the morning to understand what happened overnight.
+
+Every iteration should append an entry in the format:
+
+    [YYYY-MM-DD HH:MM] iter-NNN: <task-id> — <outcome>
+    notes: <one line about what worked, what didn't, what blocked>
+
+Different purpose from LEARNINGS.md:
+  - LEARNINGS.md = durable knowledge, read by future iterations
+  - progress.txt = operational history, read by the operator
+
+Rules:
+  - Append only. Never rewrite or delete existing entries.
+  - One entry per iteration, even on failure.
+  - Include the task ID so entries can be correlated with tasks.md.
+
+---

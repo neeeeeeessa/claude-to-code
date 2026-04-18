@@ -1,0 +1,37 @@
+# Secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Ralph runtime
+.ralph-logs/
+
+# Node
+node_modules/
+dist/
+build/
+coverage/
+.next/
+.vite/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Claude Code
+.claude/local/

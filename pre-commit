@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Pre-commit safety net.
+# Blocks commits that contain destructive commands, secrets, or direct-to-main.
+
+set -e
+
+# --- Block commits directly to main/master -----------------------------------
+current_branch=$(git rev-parse --abbrev-ref HEAD)
+if [[ "$current_branch" == "main" || "$current_branch" == "master" ]]; then
+  echo "✗ direct commits to $current_branch are blocked."
+  echo "  use a branch or worktree."
+  exit 1
+fi
+
+# --- Block obvious destructive patterns in staged diff -----------------------
+if git diff --cached | grep -E '^\+.*(rm -rf /|DROP TABLE|TRUNCATE TABLE)' >/dev/null; then
+  echo "✗ destructive command detected in staged changes."
+  echo "  if this is intentional, bypass with: git commit --no-verify"
+  exit 1
+fi
+
+# --- Block committed .env files ----------------------------------------------
+if git diff --cached --name-only | grep -E '(^|/)\.env($|\.)' | grep -v '\.env\.example$' >/dev/null; then
+  echo "✗ .env file staged. secrets don't belong in git."
+  echo "  add to .gitignore and use .env.local instead."
+  exit 1
+fi
+
+# --- Block obvious API key shapes --------------------------------------------
+# Catches OpenAI, Anthropic, AWS, Stripe, GitHub tokens.
+if git diff --cached | grep -E '(sk-[a-zA-Z0-9]{20,}|sk-ant-[a-zA-Z0-9-]{20,}|AKIA[0-9A-Z]{16}|ghp_[a-zA-Z0-9]{36})' >/dev/null; then
+  echo "✗ possible API key detected in staged changes."
+  echo "  if this is a false positive, bypass with: git commit --no-verify"
+  exit 1
+fi
+
+# --- Project-specific checks run if they exist -------------------------------
+if [[ -f package.json ]] && command -v pnpm >/dev/null 2>&1; then
+  if grep -q '"lint"' package.json; then
+    pnpm lint
+  fi
+  if grep -q '"typecheck"' package.json; then
+    pnpm typecheck
+  fi
+fi
+
+exit 0

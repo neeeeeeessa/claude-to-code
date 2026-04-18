@@ -1,0 +1,60 @@
+name: ci
+
+# CI exists so Ralph's draft PRs get an external pass/fail signal.
+# This is the backpressure that prevents "declaring victory" on broken tasks.
+#
+# When Ralph opens a draft PR, GitHub Actions runs this. `gh pr checks` in
+# the next iteration tells Ralph whether the previous task actually worked.
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: detect project type
+        id: detect
+        run: |
+          if [[ -f package.json ]]; then echo "type=node" >> $GITHUB_OUTPUT
+          elif [[ -f pyproject.toml || -f requirements.txt ]]; then echo "type=python" >> $GITHUB_OUTPUT
+          else echo "type=unknown" >> $GITHUB_OUTPUT
+          fi
+
+      - name: node setup
+        if: steps.detect.outputs.type == 'node'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: node install
+        if: steps.detect.outputs.type == 'node'
+        run: |
+          npm install -g pnpm
+          pnpm install --frozen-lockfile
+
+      - name: node checks
+        if: steps.detect.outputs.type == 'node'
+        run: |
+          if grep -q '"lint"' package.json; then pnpm lint; fi
+          if grep -q '"typecheck"' package.json; then pnpm typecheck; fi
+          if grep -q '"test"' package.json; then pnpm test; fi
+
+      - name: python setup
+        if: steps.detect.outputs.type == 'python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: python checks
+        if: steps.detect.outputs.type == 'python'
+        run: |
+          pip install uv
+          uv sync || pip install -r requirements.txt
+          uv run pytest || pytest
