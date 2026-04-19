@@ -39,8 +39,9 @@ portable convention they all read.
                              │
                              ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  4. VALIDATE with /speckit.clarify and /speckit.analyze     │
-│     Catches ambiguities before the loop starts thrashing.   │
+│  4. VALIDATE — run `validate-specs` skill (A3)              │
+│     Catches ambiguities and weak tasks before the loop      │
+│     starts thrashing. Also auto-runs inside /ralph-go.      │
 └─────────────────────────────────────────────────────────────┘
                              │
                              ▼
@@ -74,10 +75,12 @@ git config core.hooksPath .githooks
 # 4. Create a branch (the loop refuses to run on main)
 git checkout -b ralph/initial-build
 
-# 5. Open your agent of choice and run
-claude                                  # or: cursor . / codex / gemini
-> /speckit.analyze                      # sanity-check the specs
+# 5. Open Claude Code and run
+claude
+> validate specs                        # via the validate-specs skill (A3)
 > /ralph-go cautious                    # start the loop (first run)
+#   Note: /ralph-go auto-runs validation as pre-flight; the separate
+#   "validate specs" call is only needed if you want to check mid-project.
 ```
 
 ## The Two Execution Patterns
@@ -196,6 +199,36 @@ This isn't cargo-cult syntax. It's a deliberate choice:
 This is a small thing that prevents a large class of "loop thinks it succeeded
 but didn't" bugs. Other Ralph implementations have converged on the same
 pattern for the same reason.
+
+## Spec Validation (A3)
+
+The `validate-specs` skill catches problems in your spec files *before* Ralph
+burns tokens on them. It runs automatically as pre-flight inside `/ralph-go`
+and the `bootstrap-project` skill; you can also invoke it manually with
+phrases like "validate specs" or "check specs" in Claude Code.
+
+Two layers of checks:
+
+**Fast structural + heuristic checks (always run, no API cost):**
+- All required files exist with required sections
+- Minimum 3 user stories, minimum 5 tasks
+- Every task has Description, Acceptance, and Verify
+- No placeholder verify commands (`# TODO`, `<...>`, etc.)
+- No subjective language in acceptance criteria ("feels clean," "user-friendly")
+- No oversized tasks (>100 words — usually means mixed concerns)
+
+**Optional LLM-based semantic audit (opt-in, costs ~30-60s of API calls):**
+- Constitution violations in the plan
+- User stories not traced to tasks
+- Stack contradictions
+- Implausible acceptance criteria that regex missed
+
+The LLM audit is worth running on important projects or when the fast
+validator passes but you want extra confidence. Trigger it with "run deep
+audit" or "llm audit" in Claude Code.
+
+Exit codes from the validator: `0` = clean, `1` = hard issues (blocks loop),
+`2` = warnings only (proceeds).
 
 ## Safety Defaults
 
