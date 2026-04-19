@@ -212,7 +212,7 @@ The template assumes you will run Pattern A (the loop) AFK. The non-negotiables:
 
 ## Environment Variables
 
-Override anything:
+Override anything. Secrets go in `.env.local` (gitignored); see `.env.local.example`.
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -223,6 +223,47 @@ Override anything:
 | `PROMPT_FILE` | `scripts/ralph/prompt.md` | Per-iteration prompt |
 | `AGENT_CMD` | `claude --dangerously-skip-permissions -p` | Agent CLI to invoke |
 | `LOG_DIR` | `.ralph-logs` | Where iteration logs go |
+| `SESSION_STOP_PCT` | `85` | Stop if Claude session usage ≥ this % (Claude Code only) |
+| `WEEKLY_STOP_PCT` | `75` | Stop if Claude weekly usage ≥ this % (Claude Code only) |
+| `AUTO_RESUME_ON_429` | `1` | `1` = pause and resume on rate limit; `0` = exit |
+| `HEARTBEAT_MINUTES` | `0` | Send a status Telegram every N minutes (`0` = off) |
+| `TELEGRAM_BOT_TOKEN` | — | Enables Telegram notifications (see `.env.local.example`) |
+| `TELEGRAM_CHAT_ID` | — | Required with `TELEGRAM_BOT_TOKEN` |
+
+## Rate Limit Awareness
+
+When running on Claude Code with a Pro or Max subscription, the loop tracks your
+5-hour session window and 7-day weekly cap. It:
+
+- Queries `/status` on iteration 1 and every 5th iteration after
+- Stops pre-emptively if session usage ≥ `SESSION_STOP_PCT` or weekly ≥ `WEEKLY_STOP_PCT`
+- Detects HTTP 429 / rate-limit errors in iteration logs
+- When `AUTO_RESUME_ON_429=1` (the default), sleeps until the window resets
+  and retries the same iteration — overnight runs no longer die on rate limits,
+  they pause and resume
+
+Per-iteration usage is logged to `.ralph-logs/usage.jsonl` (one JSON object
+per line) for post-hoc analysis. Non-Claude agents skip the session/weekly
+tracking but still get token counts where available.
+
+## Telegram Notifications
+
+Optional. Fill in `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in `.env.local`
+to enable. Event-driven by default; a periodic heartbeat is opt-in via
+`HEARTBEAT_MINUTES`.
+
+Events that trigger notifications:
+
+- **Start** — loop starting, preset, total tasks
+- **Task done** — task ID, progress (e.g. `7/15`)
+- **Task failed 3+ times** — warns loop is struggling on a specific task
+- **Rate limit pause** — which cap was hit and estimated resume time
+- **Rate limit resume** — when the loop picks back up
+- **Heartbeat** (optional) — every `HEARTBEAT_MINUTES`, compact status
+- **Exit** — success, consecutive failures, max iterations, or rate-limit-stop
+
+Setup walkthrough is in `.env.local.example`. Use a **dedicated** bot — don't
+reuse one from another project.
 
 ## When NOT to Use the Loop
 
