@@ -5,6 +5,10 @@ A template repo for turning ideas into shipped code via the
 chat agent for as long as you need, then hand off to an execution loop
 that builds it.
 
+> **Already have this set up?** If you're pulling down an updated version
+> of this repo, see [`UPDATE.md`](UPDATE.md) for what changed and how to
+> apply the update without losing your existing config.
+
 The template defines the **pipeline**, not the product. It contains no app
 code, no stack preferences, and no opinions about what you're building. It
 defines how work flows from a locked-in spec to a shipped feature.
@@ -26,22 +30,27 @@ portable convention they all read.
                              │
                              ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  2. BOOTSTRAP (one Claude Code command)                     │
-│     Say "bootstrap a new project" — the skill creates the   │
-│     repo from this template, imports your 5 spec files,     │
-│     and preps everything.                                   │
+│  2. SCAFFOLD from this template                             │
+│     gh repo create my-thing --template <user>/claude-to-    │
+│                              code --clone                   │
 └─────────────────────────────────────────────────────────────┘
                              │
                              ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  3. VALIDATE — run `validate-specs` skill                   │
-│     Auto-runs during bootstrap and inside /ralph-go.        │
-│     Catches weak tasks before the loop thrashes on them.    │
+│  3. INGEST the four markdown files into the right places    │
+│     (via the spec-ingest skill, or manually)                │
 └─────────────────────────────────────────────────────────────┘
                              │
                              ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  4. EXECUTE in either pattern:                              │
+│  4. VALIDATE — run `validate-specs` skill (A3)              │
+│     Catches ambiguities and weak tasks before the loop      │
+│     starts thrashing. Also auto-runs inside /ralph-go.      │
+└─────────────────────────────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────┐
+│  5. EXECUTE in either pattern:                              │
 │     A) Autonomous loop via /ralph-go  (AFK, overnight)      │
 │     B) Interactive in your IDE        (feature-at-a-time)   │
 │     Both read the same files. Switch between them freely.   │
@@ -101,22 +110,28 @@ claude /login        # run this once in Claude Code
 
 ### 2. First-time setup — one-time per machine
 
-This repo serves two purposes: it's a **template** that new projects clone
-from, and it contains the **tools** (skills, installer, Spec Factory prompt)
-that run the pipeline. You only need to do this setup once per machine.
+This is a single repo that serves two purposes: it's a **template** that new
+projects clone from, and it contains the **tools** (skills, installer,
+Spec Factory prompt) that run the pipeline.
 
-#### Clone this repo
+You'll do four things once per machine:
+1. Clone this repo
+2. Install the skills
+3. Create your `~/.claude/operator.env` (your identity + Telegram)
+4. If this is the first time your account has this repo, push it to GitHub
+
+#### Step 2.1 — Clone this repo
 
 ```bash
 cd <wherever you keep source repos>
 gh repo clone <your-user>/claude-to-code
 ```
 
-If you haven't pushed this repo yet — if you're reading this from a
-downloaded bundle — skip ahead to ["Pushing this repo to GitHub (first
-time only)"](#pushing-this-repo-to-github-first-time-only) below.
+If the repo doesn't exist on your GitHub account yet, skip to
+[step 2.4](#step-24--push-this-repo-to-github-first-time-only) to create
+it first, then come back here.
 
-#### Install the skills
+#### Step 2.2 — Install the skills
 
 ```bash
 cd claude-to-code/tools
@@ -127,14 +142,69 @@ The installer:
 - Copies the four skills into `~/.claude/skills/`
 - Preserves any existing `.config` files (so reinstalling doesn't wipe
   your bootstrap skill preferences)
-- Runs the `check-setup` doctor at the end to verify everything is ready
+- Runs the `check-setup` doctor at the end to verify your environment
 
 If the doctor reports anything missing, follow its install hints.
 
-#### Pushing this repo to GitHub (first time only)
+#### Step 2.3 — Create your `operator.env` (files you must create yourself)
 
-If you're the one creating the `claude-to-code` repo for the first time
-on your GitHub account, do this after cloning or downloading the code:
+The pipeline has **two files you must create yourself** because they
+contain personal info or secrets and are gitignored / not in the repo:
+
+| File | Where | What it holds | How to create |
+|---|---|---|---|
+| `operator.env` | `~/.claude/operator.env` | Your name, location, GitHub user, Telegram credentials | Bootstrap skill offers to create it on first run, or copy manually (below) |
+| `.env.local` | inside each project | Per-project loop overrides (optional) | Copy `.env.local.example` to `.env.local` inside the project |
+
+**`operator.env` is the important one.** Without it:
+- New projects won't get a `specs/operator-context.md` (agents work without
+  knowing your name, location, or jurisdiction)
+- Telegram notifications won't fire
+
+**To create it now** (recommended — the bootstrap skill can also do this
+interactively on its first run):
+
+```bash
+# From inside your cloned claude-to-code directory:
+mkdir -p ~/.claude
+cp tools/operator.env.example ~/.claude/operator.env
+
+# Edit the file with your info — at minimum, set:
+#   OPERATOR_NAME
+#   OPERATOR_LOCATION
+#   OPERATOR_JURISDICTION
+#   GITHUB_USERNAME
+#   DEFAULT_TEMPLATE_REPO (e.g. neeeeeeessa/claude-to-code)
+#   TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID (optional)
+```
+
+To get your Telegram values (optional):
+
+1. In Telegram, chat with **@BotFather**, send `/newbot`
+2. Pick a name (e.g. `claude-to-code-yourname-bot`) and save the token
+3. Send any message to your new bot from your own Telegram
+4. In a browser, visit `https://api.telegram.org/bot<TOKEN>/getUpdates`
+5. Find `"chat":{"id": NNNNNNN}` in the JSON response — that's `TELEGRAM_CHAT_ID`
+
+Secure the file so only you can read it:
+
+```bash
+chmod 600 ~/.claude/operator.env
+```
+
+Verify it's picked up:
+
+```bash
+# In Claude Code:
+> check setup
+# Should show: ✓ operator.env found at ~/.claude/operator.env
+```
+
+#### Step 2.4 — Push this repo to GitHub (first time only)
+
+Skip this entirely if the repo already exists on your account. Only run
+this if you're the one setting up `<your-user>/claude-to-code` for the
+first time:
 
 ```bash
 cd claude-to-code
@@ -148,13 +218,9 @@ gh repo create <your-user>/claude-to-code \
   --description "Idea to spec to autonomous loop pipeline." \
   --push
 
-# Mark as a GitHub template so 'gh repo create --template' works
+# Mark as a GitHub template so 'gh repo create --template' works later
 gh repo edit <your-user>/claude-to-code --template
 ```
-
-After this, anyone (including you) can both:
-- **Install the tools** by cloning normally and running `tools/install.sh`
-- **Create a new project** by using this as a GitHub template (see step 4)
 
 ---
 
@@ -235,8 +301,6 @@ The skill then:
 
 - Creates the GitHub repo from your template
 - Clones it locally
-- **Removes the `tools/` folder** (it's only needed in the source repo,
-  not in new projects)
 - Activates the pre-commit hook
 - Moves the 5 spec files into correct locations
 - Creates a `ralph/initial-build` branch
@@ -277,27 +341,15 @@ The agent does one task, you review, you commit. No loop.
 Both patterns read the same `specs/tasks.md` — you can switch between them
 mid-project and nothing gets built twice.
 
-#### Configure Telegram notifications (optional)
+#### Configure Telegram notifications (optional, one-time)
 
-Recommended for AFK runs. Otherwise the loop works fine without this.
+Telegram credentials live in `~/.claude/operator.env` (operator-wide, set
+once per machine). See [Section 2](#2-first-time-setup--one-time-per-machine)
+for where to add them. Once set, they work for every project you bootstrap.
 
-Inside a project directory, after bootstrapping:
-
-1. Open Telegram, chat with `@BotFather`, send `/newbot`
-2. Pick a name (e.g. `claude-to-code-neeeeeeessa-bot`)
-3. BotFather replies with a token — save it
-4. Send any message to your new bot from Telegram
-5. In a browser, visit `https://api.telegram.org/bot<TOKEN>/getUpdates` —
-   find your chat ID in the response under `"chat":{"id": ... }`
-6. Copy `.env.local.example` to `.env.local` (inside the project):
-   ```bash
-   cp .env.local.example .env.local
-   ```
-7. Edit `.env.local` with your token and chat ID
-8. `.env.local` is gitignored — never commits
-
-Next `/ralph-go` run will send notifications on start, task completion,
-rate limit pauses, and exit.
+There is no per-project Telegram setup — simpler that way. If you have a
+good reason to need different channels per project, that's a future change
+we can revisit.
 
 ---
 
@@ -383,6 +435,14 @@ For a Claude-analyzed briefing with judgment-based suggestions (takes
 Re-run `check setup` in Claude Code to see which tool is missing, then
 install from the links in [Section 1](#1-prerequisites--what-to-install).
 
+**"Windows Subsystem for Linux has no installed distributions"**
+You're running `bash install.sh` in PowerShell, which routes `bash` to
+WSL. Either use Git Bash directly (Windows key → "Git Bash"), or call
+Git Bash from PowerShell explicitly:
+```powershell
+& "C:\Program Files\Git\bin\bash.exe" install.sh
+```
+
 **Bootstrap skill says "project name required"**
 You skipped the name prompt. Try again with *"bootstrap a new project
 called <name>"*.
@@ -399,9 +459,17 @@ Run *"deep audit"* to see if Claude can spot what's wrong. Usually the task
 needs splitting or the verification command is wrong.
 
 **Telegram notifications not arriving**
-Check `.env.local` has both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`
-filled in, and that `curl` is installed. The loop silently skips
-notifications if either is missing.
+Check `~/.claude/operator.env` has both `TELEGRAM_BOT_TOKEN` and
+`TELEGRAM_CHAT_ID` filled in, and that `curl` is installed. The loop
+silently skips notifications if either is missing. Telegram credentials
+are no longer read from per-project `.env.local` — they live in
+`operator.env` only.
+
+**New project doesn't have `specs/operator-context.md`**
+Your `~/.claude/operator.env` wasn't set up (or was empty) when bootstrap
+ran. Either delete the project and re-bootstrap after creating
+`operator.env`, or create `specs/operator-context.md` manually using
+`tools/operator.env.example` as a guide.
 
 **Rate limit hit overnight**
 That's fine. With `AUTO_RESUME_ON_429=1` (default), the loop sleeps until
@@ -479,46 +547,26 @@ convention); `CLAUDE.md` is a thin pointer kept for Claude Code's auto-discovery
 
 ## What's In Here
 
-This repo has a **dual role**: it's a GitHub template for creating new
-projects, and it contains the tooling (skills, installer, Spec Factory
-prompt) for running the pipeline.
-
 ```
 .
-│
-├── (template content — what new projects get)
 ├── AGENTS.md                      ← primary operator file (all agents read this)
 ├── CLAUDE.md                      ← thin pointer → AGENTS.md
 ├── LEARNINGS.md                   ← append-only discoveries (persistent memory)
 ├── progress.txt                   ← append-only iteration log
-├── .specify/memory/constitution.md ← project non-negotiables (from ideation)
+├── .specify/
+│   └── memory/
+│       └── constitution.md        ← project non-negotiables (from ideation)
 ├── specs/                         ← spec.md, plan.md, tasks.md land here
 ├── scripts/ralph/
-│   ├── ralph.sh                   ← the autonomous loop
-│   ├── notify.sh                  ← Telegram notifications
-│   ├── usage.sh                   ← rate-limit tracking helpers
+│   ├── ralph.sh                   ← the autonomous loop (preset-aware, agent-agnostic)
 │   └── prompt.md                  ← per-iteration prompt
-├── .claude/commands/ralph-go.md   ← slash command to launch the loop
-├── .github/workflows/ci.yml       ← CI = external backpressure signal
+├── .claude/commands/
+│   └── ralph-go.md                ← slash command to launch the loop
+├── .github/workflows/ci.yml       ← CI = external backpressure signal for the loop
 ├── .githooks/pre-commit           ← blocks destructive ops & secret leaks
-├── .env.local.example             ← template for Telegram credentials
 ├── LICENSE                        ← MIT
-├── .gitignore
-│
-└── tools/                         ← for the source repo only; removed on bootstrap
-    ├── install.sh                 ← one-command skill installer
-    ├── skills/
-    │   ├── bootstrap-project/     ← creates new projects from this template
-    │   ├── validate-specs/        ← pre-flight validation for specs
-    │   ├── resume-project/        ← "where did we leave off" briefings
-    │   └── check-setup/           ← setup doctor for new machines
-    └── spec-factory/
-        └── spec-factory-system-prompt.md  ← for Claude.ai Project
+└── .gitignore
 ```
-
-**The `tools/` folder** is only useful in the source repo. When you create
-a new project from this template, the bootstrap skill automatically removes
-it — you won't find it in your project repos.
 
 ## What's Deliberately NOT In Here
 

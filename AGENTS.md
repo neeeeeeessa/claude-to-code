@@ -7,10 +7,15 @@ like to work**. It does **not** describe the product — that lives in `specs/`.
 
 ---
 
-## Operator
+## Operator Context
 
-Based in Amsterdam. GDPR and Dutch law are the defaults unless `specs/spec.md`
-says otherwise. The operator cares about shipping, not about ceremony.
+Operator-specific context (name, location, jurisdiction, preferences) lives
+in `specs/operator-context.md` if that file exists. **Read it first** — it
+overrides or extends anything in this file.
+
+If `specs/operator-context.md` does not exist, work with no assumptions about
+the operator's location, jurisdiction, or personal preferences. Ask when
+these would matter (e.g. "what privacy regime applies here?").
 
 ## Working Principles
 
@@ -67,13 +72,14 @@ built twice.
 
 When any agent starts a session in this project, read in this order:
 
-1. `AGENTS.md` — this file (how the operator works)
-2. `LEARNINGS.md` — accumulated discoveries from previous iterations
-3. `progress.txt` — log of what was attempted recently
-4. `.specify/memory/constitution.md` — project non-negotiables
-5. `specs/spec.md` — what we're building
-6. `specs/plan.md` — technical approach
-7. `specs/tasks.md` — what to do next
+1. `AGENTS.md` — this file (universal working principles)
+2. `specs/operator-context.md` — who the operator is, if present
+3. `LEARNINGS.md` — accumulated discoveries from previous iterations
+4. `progress.txt` — log of what was attempted recently
+5. `.specify/memory/constitution.md` — project non-negotiables
+6. `specs/spec.md` — what we're building
+7. `specs/plan.md` — technical approach
+8. `specs/tasks.md` — what to do next
 
 ## Files You Are Allowed To Modify
 
@@ -85,6 +91,7 @@ When any agent starts a session in this project, read in this order:
 ## Files You Are NOT Allowed To Modify
 
 - `AGENTS.md`, `CLAUDE.md` — operator-owned
+- `specs/operator-context.md` — operator-owned
 - `.specify/memory/constitution.md` — operator-owned
 - `specs/spec.md`, `specs/plan.md` — operator-owned, describe intent
 - `scripts/ralph/*` — operator-owned, defines the loop itself

@@ -141,6 +141,41 @@ else
   warn_mark "claude not installed — skipping auth check"
 fi
 
+# --- Operator config ---------------------------------------------------------
+
+section "Operator configuration"
+
+OPERATOR_ENV="$HOME/.claude/operator.env"
+if [[ -f "$OPERATOR_ENV" ]]; then
+  check_mark "operator.env found at $OPERATOR_ENV"
+
+  # Source it into a subshell to check for required fields without polluting
+  # the current env.
+  (
+    set -a
+    # shellcheck disable=SC1090
+    . "$OPERATOR_ENV" 2>/dev/null || true
+    set +a
+
+    for field in OPERATOR_NAME GITHUB_USERNAME; do
+      if [[ -z "${!field:-}" ]]; then
+        echo "  ! ${field} is empty in operator.env"
+      fi
+    done
+
+    if [[ -n "${TELEGRAM_BOT_TOKEN:-}" && -n "${TELEGRAM_CHAT_ID:-}" ]]; then
+      echo "  ✓ telegram credentials set"
+    else
+      echo "  (i) telegram not set — notifications disabled (that's fine)"
+    fi
+  )
+else
+  warn_mark "operator.env not found at $OPERATOR_ENV"
+  hint "bootstrap-project skill offers to create it on first use"
+  hint "or copy from <your-clone>/tools/operator.env.example"
+  WARNINGS+=("operator.env not configured — new projects won't have operator-context.md")
+fi
+
 # --- Installed skills ---------------------------------------------------------
 
 section "Skills installed in ~/.claude/skills/"

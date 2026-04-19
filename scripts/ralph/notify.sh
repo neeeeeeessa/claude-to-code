@@ -20,8 +20,19 @@
 
 set -uo pipefail
 
-# --- Load .env.local if present, without leaking to global ralph env ---------
+# --- Load credentials from layered config ------------------------------------
+#
+# Priority: .env.local (per-project) > ~/.claude/operator.env (operator-wide)
+# Per-project can override operator-wide. If neither has Telegram credentials,
+# notifications are silently disabled.
 
+# 1. Operator-wide defaults
+if [[ -f "$HOME/.claude/operator.env" ]]; then
+  # shellcheck disable=SC1091
+  set -a; . "$HOME/.claude/operator.env"; set +a
+fi
+
+# 2. Per-project overrides
 if [[ -f .env.local ]]; then
   # shellcheck disable=SC1091
   set -a; . .env.local; set +a

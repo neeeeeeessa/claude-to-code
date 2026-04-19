@@ -25,11 +25,6 @@ if [[ ! "$PROJECT_NAME" =~ ^[a-z0-9][a-z0-9-]*[a-z0-9]$ ]]; then
   exit 1
 fi
 
-# --- Paths --------------------------------------------------------------------
-
-SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG_FILE="$SKILL_DIR/.config"
-
 # --- Preflight ----------------------------------------------------------------
 
 for cmd in gh git; do
@@ -48,29 +43,113 @@ if ! gh auth status >/dev/null 2>&1; then
   exit 1
 fi
 
-# --- Config: first run or existing? -------------------------------------------
-
-# Config file format (one key=value per line):
-#   github_user=neeeeeeessa
-#   template_repo=neeeeeeessa/claude-to-code
-#   target_folders=C:\Users\simoe\Projects|D:\work|~/Dev/github
-#   default_source=~/Downloads
+# --- Operator config: layered from ~/.claude/operator.env + skill .config ----
 #
-# `target_folders` is a pipe-separated list of candidate folders to offer.
+# Two config layers, with operator.env higher priority:
+#   ~/.claude/operator.env   — operator-wide identity (name, location,
+#                              github user, default template, telegram)
+#   .config (in skill dir)    — bootstrap-specific paths (target folders,
+#                              default source folder)
+#
+# Priority: operator.env > .config. If operator.env has GITHUB_USERNAME we
+# use that and never prompt for it.
+
+OPERATOR_ENV="$HOME/.claude/operator.env"
+
+# Load operator.env if present. Values become shell variables.
+if [[ -f "$OPERATOR_ENV" ]]; then
+  # shellcheck disable=SC1090
+  set -a
+  . "$OPERATOR_ENV"
+  set +a
+fi
+
+# Offer to create operator.env on first run if it doesn't exist.
+# This is separate from the skill's .config — operator.env is operator-wide.
+if [[ ! -f "$OPERATOR_ENV" ]]; then
+  echo ""
+  echo "no operator config found at $OPERATOR_ENV"
+  echo ""
+  echo "this file holds your identity (name, location, github user, etc.) and"
+  echo "is read once per project to snapshot into specs/operator-context.md."
+  echo ""
+  read -rp "create it now? [Y/n]: " create_op
+  create_op="${create_op:-Y}"
+
+  if [[ "$create_op" == "Y" || "$create_op" == "y" ]]; then
+    mkdir -p "$(dirname "$OPERATOR_ENV")"
+
+    echo ""
+    read -rp "your name (as agents should refer to you): " OPERATOR_NAME
+    read -rp "location (city, country): " OPERATOR_LOCATION
+    echo ""
+    echo "jurisdiction — legal/privacy regime for your projects:"
+    echo "  examples: 'GDPR and Dutch law', 'CCPA (California)',"
+    echo "            'LGPD (Brazil)', 'none — personal projects only'"
+    read -rp "jurisdiction: " OPERATOR_JURISDICTION
+    echo ""
+    read -rp "your github username: " GITHUB_USERNAME
+    read -rp "default template repo [${GITHUB_USERNAME}/claude-to-code]: " DEFAULT_TEMPLATE_REPO
+    DEFAULT_TEMPLATE_REPO="${DEFAULT_TEMPLATE_REPO:-${GITHUB_USERNAME}/claude-to-code}"
+    echo ""
+    echo "working style — one paragraph on how you like agents to work (optional):"
+    echo "(press enter to use the default)"
+    read -rp "style: " OPERATOR_STYLE
+    OPERATOR_STYLE="${OPERATOR_STYLE:-Ship over ceremony. Prefer established libraries over custom code. One task at a time. Ask when uncertain.}"
+
+    cat > "$OPERATOR_ENV" <<EOF
+# Operator-wide config — edit anytime.
+OPERATOR_NAME="$OPERATOR_NAME"
+OPERATOR_LOCATION="$OPERATOR_LOCATION"
+OPERATOR_JURISDICTION="$OPERATOR_JURISDICTION"
+OPERATOR_STYLE="$OPERATOR_STYLE"
+GITHUB_USERNAME="$GITHUB_USERNAME"
+DEFAULT_TEMPLATE_REPO="$DEFAULT_TEMPLATE_REPO"
+
+# Telegram (optional — set here for all projects, or in per-project .env.local)
+TELEGRAM_BOT_TOKEN=""
+TELEGRAM_CHAT_ID=""
+EOF
+
+    chmod 600 "$OPERATOR_ENV"
+    echo ""
+    echo "✓ saved to $OPERATOR_ENV (chmod 600 — owner-only readable)"
+    echo "  edit anytime. telegram fields are empty — fill them if you want"
+    echo "  notifications across projects."
+    echo ""
+  else
+    echo ""
+    echo "continuing without operator.env. you'll be asked for github user"
+    echo "below, and specs/operator-context.md will not be written in new"
+    echo "projects. you can create $OPERATOR_ENV later from"
+    echo "  <your-clone>/tools/operator.env.example"
+    echo ""
+  fi
+fi
+
+# --- Skill-local config (target folders, default source) ----------------------
+
+SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="$SKILL_DIR/.config"
 
 if [[ ! -f "$CONFIG_FILE" ]]; then
   echo ""
-  echo "first run on this machine — let's set up the config."
+  echo "first bootstrap run on this machine — let's set your paths."
   echo ""
 
-  read -rp "your github username: " github_user
-  if [[ -z "$github_user" ]]; then
-    echo "error: github username cannot be empty" >&2
-    exit 1
+  # If operator.env had GITHUB_USERNAME, use that. Otherwise prompt.
+  if [[ -z "${GITHUB_USERNAME:-}" ]]; then
+    read -rp "your github username: " GITHUB_USERNAME
+    if [[ -z "$GITHUB_USERNAME" ]]; then
+      echo "error: github username cannot be empty" >&2
+      exit 1
+    fi
   fi
 
-  read -rp "template repo [${github_user}/claude-to-code]: " template_repo
-  template_repo="${template_repo:-${github_user}/claude-to-code}"
+  if [[ -z "${DEFAULT_TEMPLATE_REPO:-}" ]]; then
+    read -rp "template repo [${GITHUB_USERNAME}/claude-to-code]: " DEFAULT_TEMPLATE_REPO
+    DEFAULT_TEMPLATE_REPO="${DEFAULT_TEMPLATE_REPO:-${GITHUB_USERNAME}/claude-to-code}"
+  fi
 
   echo ""
   echo "where do projects live on this machine?"
@@ -100,21 +179,29 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
   default_source="${default_source/#\~/$HOME}"
 
   cat > "$CONFIG_FILE" <<EOF
-github_user=$github_user
-template_repo=$template_repo
 target_folders=$target_folders
 default_source=$default_source
 EOF
 
   echo ""
   echo "config saved to $CONFIG_FILE"
-  echo "edit this file anytime to change defaults."
   echo ""
 fi
 
-# Load config
+# Load skill-local config
 # shellcheck disable=SC1090
 . "$CONFIG_FILE"
+
+# These come from operator.env if present, otherwise fallback to what was
+# prompted during the skill-config wizard
+github_user="${GITHUB_USERNAME:-}"
+template_repo="${DEFAULT_TEMPLATE_REPO:-${github_user}/claude-to-code}"
+
+if [[ -z "$github_user" ]]; then
+  echo "error: GITHUB_USERNAME not set in $OPERATOR_ENV or .config" >&2
+  echo "       edit either file to set it." >&2
+  exit 1
+fi
 
 # --- Interactive: target folder -----------------------------------------------
 
@@ -325,14 +412,6 @@ cd "$TARGET_DIR"
 echo "▶ activating pre-commit hook"
 git config core.hooksPath .githooks
 
-# The template repo contains a tools/ folder with skills, installer, and the
-# Spec Factory prompt. New projects don't need any of that — remove it so
-# the project starts clean.
-if [[ -d tools ]]; then
-  echo "▶ removing tools/ (not needed in new projects)"
-  rm -rf tools
-fi
-
 echo "▶ placing spec files"
 # constitution goes to .specify/memory/
 cp "${FOUND_FILES[constitution.md]}" .specify/memory/constitution.md
@@ -344,6 +423,44 @@ done
 # Remove the placeholder README in specs/ if it exists
 if [[ -f specs/README.md ]]; then
   rm specs/README.md
+fi
+
+# --- Generate specs/operator-context.md from operator.env ---------------------
+
+if [[ -n "${OPERATOR_NAME:-}" || -n "${OPERATOR_LOCATION:-}" || -n "${OPERATOR_JURISDICTION:-}" ]]; then
+  echo "▶ writing specs/operator-context.md from your operator.env"
+  cat > specs/operator-context.md <<EOF
+# Operator Context
+
+This file describes the operator running this project — who they are, where
+they work, and how they prefer to work. Agents should read this **after
+\`AGENTS.md\`** but before making any judgment calls that depend on operator
+identity or jurisdiction.
+
+Generated at project bootstrap from \`~/.claude/operator.env\`. Edit freely
+for this specific project if needed — changes stay local to this repo and
+won't affect future projects.
+
+---
+
+## Identity
+
+**Name:** ${OPERATOR_NAME:-not set}
+
+**Based in:** ${OPERATOR_LOCATION:-not set}
+
+**Jurisdiction:** ${OPERATOR_JURISDICTION:-not set}
+
+## Working style
+
+${OPERATOR_STYLE:-not set}
+
+## GitHub
+
+\`${GITHUB_USERNAME:-not set}\`
+EOF
+else
+  echo "▶ skipping specs/operator-context.md (operator.env not configured)"
 fi
 
 echo "▶ creating branch ralph/initial-build"
