@@ -35,6 +35,13 @@ if [[ -z "$TELEGRAM_BOT_TOKEN" || -z "$TELEGRAM_CHAT_ID" ]]; then
   exit 0
 fi
 
+# curl is required to reach Telegram. If it's missing, skip silently rather
+# than erroring. Notifications are strictly additive — their absence should
+# never block the loop.
+if ! command -v curl >/dev/null 2>&1; then
+  exit 0
+fi
+
 # --- Format the message based on event type ----------------------------------
 
 EVENT="${1:-}"

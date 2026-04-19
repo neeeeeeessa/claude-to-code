@@ -57,6 +57,23 @@ portable convention they all read.
 
 Assumes you've already produced the four markdown files during ideation.
 
+### First time on a new machine
+
+Before bootstrapping any project, verify your environment. Open Claude Code
+and run:
+
+```
+> check setup
+```
+
+Or directly: `bash ~/.claude/skills/check-setup/doctor.sh`
+
+The `check-setup` skill (if installed) reports missing tools, auth issues,
+and uninstalled skills with explicit install commands. Fix anything red
+before proceeding.
+
+### Every new project
+
 ```bash
 # 1. Create a new project from this template
 gh repo create my-new-thing --template <your-user>/claude-to-code --clone

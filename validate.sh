@@ -34,6 +34,15 @@ if [[ ! -f "$TASKS" ]]; then
   exit 3
 fi
 
+# python3 is used for task parsing. Check upfront rather than mid-run.
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "error: python3 not found on PATH." >&2
+  echo "       the validator uses python3 for task parsing." >&2
+  echo "       install python from https://www.python.org/downloads/" >&2
+  echo "       or (Windows): winget install Python.Python.3.12" >&2
+  exit 3
+fi
+
 # --- Structural checks: required files --------------------------------------
 
 for f in "$CONSTITUTION" "$SPEC" "$PLAN" "$TASKS"; do

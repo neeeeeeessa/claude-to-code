@@ -1,97 +1,84 @@
-# Installing the `validate-specs` skill
+# Installing the `check-setup` skill
 
-Claude Code skill that validates claude-to-code spec files before Ralph runs.
-Installs once per machine.
+Claude Code skill that verifies your environment is ready to use the
+claude-to-code pipeline. Run it on a new machine, after installing new
+tools, or whenever something breaks mysteriously.
 
-## On the Windows laptop (Git Bash)
-
-```bash
-mkdir -p ~/.claude/skills/validate-specs
-
-# Copy the three files into it:
-#   - SKILL.md      (trigger definition)
-#   - validate.sh   (fast structural + heuristic checks, always runs)
-#   - llm-audit.sh  (optional deeper audit using Claude)
-
-chmod +x ~/.claude/skills/validate-specs/validate.sh
-chmod +x ~/.claude/skills/validate-specs/llm-audit.sh
-```
-
-## On the Unix machine (Mac or Linux)
+## Install on Windows (Git Bash)
 
 ```bash
-mkdir -p ~/.claude/skills/validate-specs
-# copy all three files into that directory
-chmod +x ~/.claude/skills/validate-specs/*.sh
+mkdir -p ~/.claude/skills/check-setup
+
+# Copy into it:
+#   - SKILL.md
+#   - doctor.sh
+
+chmod +x ~/.claude/skills/check-setup/doctor.sh
 ```
 
-## Requirements
+## Install on Unix (Mac or Linux)
 
-- `python3` on PATH (Git Bash on Windows usually has access to system Python;
-  if not, install from python.org)
-- `claude` CLI for the optional LLM audit (not needed for the fast validator)
+```bash
+mkdir -p ~/.claude/skills/check-setup
+# copy the two files into that directory
+chmod +x ~/.claude/skills/check-setup/doctor.sh
+```
 
 ## How it triggers
 
-Three ways:
+In Claude Code, say one of:
 
-**1. Automatically by other skills.**
+- "check setup"
+- "doctor"
+- "health check"
+- "am I ready"
+- "check dependencies"
+- "verify install"
+- "is everything installed"
 
-- A2 (`bootstrap-project`) runs it right after placing the spec files
-- `/ralph-go` runs it as pre-flight before starting the loop
-
-**2. Explicitly in Claude Code.**
-
-Phrases like:
-- "validate specs"
-- "check specs"
-- "are my specs ready"
-- "audit specs"
-- "spec quality check"
-- "pre-flight check"
-
-**3. Directly from a shell.**
+Or run directly:
 
 ```bash
-bash ~/.claude/skills/validate-specs/validate.sh
-# Exit code: 0 clean, 1 must fix, 2 warnings only, 3 not a project dir
+bash ~/.claude/skills/check-setup/doctor.sh
 ```
+
+## What it checks
+
+**Core (required):**
+- bash, git, gh, claude, curl, python3
+
+**Recommended (nice to have):**
+- timeout (GNU coreutils), jq, pnpm
+
+**Authentication:**
+- `gh auth status`
+- `claude /status` probe
+
+**Installed skills** (in `~/.claude/skills/`):
+- bootstrap-project, validate-specs, check-setup, resume-project
+
+**Shell / OS compatibility:**
+- Detects Git Bash on Windows, macOS, Linux, WSL
+- Suggests `brew install coreutils` on macOS if `timeout` missing
+- Notes when running native Windows without WSL
 
 ## Exit codes
 
 | Code | Meaning |
 |------|---------|
-| 0    | All checks pass. Ready for Ralph. |
-| 1    | Hard issues found. Must fix before Ralph. |
-| 2    | Only soft warnings. Safe to proceed. |
-| 3    | Validator couldn't run (not a project dir, missing files). |
+| 0    | All checks passed. Ready to use the pipeline. |
+| 1    | Something required is missing. Pipeline will not work. |
+| 2    | Only recommended items missing. Pipeline works. |
 
-## Running the deeper LLM audit
+## What it will NOT do
 
-```bash
-bash ~/.claude/skills/validate-specs/llm-audit.sh
-```
+- Install anything automatically. The report lists install commands but
+  you run them. Installing system tools is out of scope for a skill.
+- Configure auth. The report tells you to run `gh auth login` etc.
+- Create repos, run Ralph, or touch your code. This skill is read-only.
 
-Or in Claude Code:
-- "run deep audit"
-- "llm audit"
-- "semantic check on specs"
-
-Costs ~30-60 seconds of API calls. Looks for constitution violations in the
-plan, user stories not traced to tasks, stack contradictions, and other
-semantic issues regex can't catch.
-
-## Updating the skill
-
-Replace files in `~/.claude/skills/validate-specs/` with new versions. No
-config to preserve.
-
-## Uninstalling
+## Uninstall
 
 ```bash
-rm -rf ~/.claude/skills/validate-specs
+rm -rf ~/.claude/skills/check-setup
 ```
-
-When A3 is uninstalled:
-- A2 (`bootstrap-project`) silently skips validation in its workflow
-- `/ralph-go` falls back to manual checks for required files and task fields

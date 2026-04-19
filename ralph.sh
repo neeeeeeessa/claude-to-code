@@ -92,6 +92,20 @@ if ! command -v gh >/dev/null 2>&1; then
   exit 1
 fi
 
+# curl is needed by notify.sh (Telegram notifications). Without it, notifications
+# silently skip, which is fine — but warn once so the operator knows.
+if ! command -v curl >/dev/null 2>&1; then
+  echo "warn: curl not found. Telegram notifications will be silently skipped." >&2
+fi
+
+# 'timeout' is used by usage.sh to bound /status calls. On Git Bash and Linux
+# it's available as 'timeout'; on macOS (without coreutils) as 'gtimeout' or
+# not at all. We warn, then let usage.sh degrade gracefully if it's missing.
+if ! command -v timeout >/dev/null 2>&1 && ! command -v gtimeout >/dev/null 2>&1; then
+  echo "warn: 'timeout' not found. /status queries will not have a time bound." >&2
+  echo "      (macOS: brew install coreutils; Windows Git Bash: should be present)" >&2
+fi
+
 current_branch=$(git rev-parse --abbrev-ref HEAD)
 if [[ "$current_branch" == "main" || "$current_branch" == "master" ]]; then
   echo "error: refusing to run on $current_branch." >&2

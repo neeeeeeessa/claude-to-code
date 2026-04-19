@@ -23,12 +23,16 @@ query_status() {
     return 0
   fi
 
-  # Run in non-interactive mode with a short timeout.
-  # Claude /status output typically includes lines like:
-  #   Session usage: 34% (2h 14m remaining)
-  #   Weekly usage: 12%
-  # We're tolerant of format changes — we look for the words loosely.
-  timeout 30 claude -p "/status" 2>/dev/null || true
+  # Run in non-interactive mode with a short timeout when available.
+  # Fall back to running without a time bound if neither timeout nor gtimeout
+  # is installed (macOS without coreutils).
+  if command -v timeout >/dev/null 2>&1; then
+    timeout 30 claude -p "/status" 2>/dev/null || true
+  elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout 30 claude -p "/status" 2>/dev/null || true
+  else
+    claude -p "/status" 2>/dev/null || true
+  fi
 }
 
 # Parses session usage percentage from /status output. Outputs a bare integer
