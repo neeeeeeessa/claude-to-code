@@ -1,37 +1,44 @@
 ---
-name: check-setup
+name: resume-project
 description: |
-  Verifies the claude-to-code pipeline environment is fully set up and ready
-  to use. Checks all required and recommended tools, Claude Code
-  authentication, GitHub authentication, installed skills, and shell
-  compatibility. Use whenever the user says "check setup", "am I ready",
-  "doctor", "health check", "check dependencies", "verify install",
-  "is everything installed", or anything similar. Also good to run after
-  installing a new tool or before starting on a new laptop.
-  Produces a report with an actionable "what to install" list for anything
-  missing. Exits 0 if all required tools present, 1 if something required
-  is missing.
+  Produces a "where did we leave off" briefing for the current claude-to-code
+  project. Aggregates state from LEARNINGS.md, progress.txt, specs/tasks.md,
+  git log, and open GitHub PRs to show what was done, what's in progress,
+  what's stuck, and what could happen next. Use when coming back to a
+  project after time away — hours, days, or months. Triggers on phrases
+  like "resume", "where did we leave off", "project status", "status",
+  "catch me up", "recap", "where am I on this". Exits cleanly with a
+  structured report — does not execute any actions, only reports.
+  Optional deeper briefing available via "deep resume" which uses Claude
+  to propose specific next steps.
 ---
 
-# Check Setup (Doctor) Skill
+# Resume Project Skill
 
-Runs the claude-to-code setup health check.
+Produces a structured status briefing for the current claude-to-code project.
 
 ## Steps
 
-1. **Execute the doctor script.**
-   Run `bash ~/.claude/skills/check-setup/doctor.sh` (on Unix) or the
-   equivalent Windows path through Git Bash.
+1. **Verify we are inside a claude-to-code project.**
+   Check that `specs/tasks.md` exists in the current directory. If not, tell
+   the operator they need to `cd` into a project directory first.
 
-2. **Relay the output verbatim.**
-   The doctor's report is designed for humans — don't re-summarize. Show
-   it exactly.
+2. **Run the resume script.**
+   Execute `bash ~/.claude/skills/resume-project/resume.sh`. This produces
+   the briefing using only local state and `gh` CLI — no API calls.
 
-3. **If items are missing, confirm the next actionable step.**
-   The doctor lists install commands. Ask the operator if they'd like you
-   to walk through any of them, but don't execute install commands without
-   explicit permission — installing system tools is out of scope for the
-   skill.
+3. **If the operator asked for a deeper briefing** (phrases like "deep resume",
+   "smart resume", "suggest what's next", or if they explicitly mention they
+   want suggestions rather than just a report), also run
+   `bash ~/.claude/skills/resume-project/deep-resume.sh` to get Claude's
+   analysis of the state and proposed next actions.
 
-4. **If everything is green**, confirm:
-   *"Setup is clean — you can bootstrap projects and run Ralph loops."*
+4. **Relay the output verbatim.**
+   The briefing is designed to be read directly — don't re-summarize. The
+   operator knows their project better than you do; let them read the raw
+   state and decide.
+
+5. **Don't execute actions based on the briefing.**
+   This skill is strictly read-only. Even if the briefing suggests "run
+   /ralph-go" or "review PR #4", don't do those things automatically. Wait
+   for explicit operator instruction.

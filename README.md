@@ -247,6 +247,32 @@ audit" or "llm audit" in Claude Code.
 Exit codes from the validator: `0` = clean, `1` = hard issues (blocks loop),
 `2` = warnings only (proceeds).
 
+## Resume After Time Away (A5)
+
+The `resume-project` skill produces a "where did we leave off" briefing
+when you return to a project after hours, days, or months. It aggregates
+state from `LEARNINGS.md`, `progress.txt`, `specs/tasks.md`, git log, and
+open PRs into a single structured report.
+
+Trigger with any of: "resume", "where did we leave off", "project status",
+"catch me up", "recap".
+
+The briefing shows:
+- Last activity (most recent commit, last iteration, current branch)
+- Progress (N/M tasks done, percentage)
+- Recently completed tasks (last 5 with timestamps)
+- What's stuck (failure entries from `progress.txt`, last iteration outcome)
+- Next up (first 5 unchecked tasks)
+- Open PRs awaiting review
+- Recent learnings worth re-reading
+- Suggested next actions (rule-based)
+
+For a Claude-analyzed briefing with richer suggestions, say "deep resume" —
+costs API calls but reads all the state and gives you judgment-based advice.
+
+The skill is strictly read-only. It tells you what you could do next; you
+decide what to actually do.
+
 ## Safety Defaults
 
 The template assumes you will run Pattern A (the loop) AFK. The non-negotiables:

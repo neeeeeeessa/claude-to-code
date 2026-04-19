@@ -1,84 +1,98 @@
-# Installing the `check-setup` skill
+# Installing the `resume-project` skill
 
-Claude Code skill that verifies your environment is ready to use the
-claude-to-code pipeline. Run it on a new machine, after installing new
-tools, or whenever something breaks mysteriously.
+Claude Code skill that produces a "where did we leave off" briefing when
+you come back to a project after time away.
 
 ## Install on Windows (Git Bash)
 
 ```bash
-mkdir -p ~/.claude/skills/check-setup
+mkdir -p ~/.claude/skills/resume-project
 
 # Copy into it:
 #   - SKILL.md
-#   - doctor.sh
+#   - resume.sh       (fast deterministic briefing — always safe)
+#   - deep-resume.sh  (optional Claude-analyzed briefing)
 
-chmod +x ~/.claude/skills/check-setup/doctor.sh
+chmod +x ~/.claude/skills/resume-project/*.sh
 ```
 
 ## Install on Unix (Mac or Linux)
 
 ```bash
-mkdir -p ~/.claude/skills/check-setup
-# copy the two files into that directory
-chmod +x ~/.claude/skills/check-setup/doctor.sh
+mkdir -p ~/.claude/skills/resume-project
+# copy the three files into that directory
+chmod +x ~/.claude/skills/resume-project/*.sh
 ```
+
+## Requirements
+
+- `git` — for log and branch info
+- `gh` (optional) — for open PR listing; the briefing works without it
+- `jq` (optional) — for cleaner PR formatting; falls back to raw `gh pr list` without it
+- `claude` (optional) — only for the deep-resume variant
 
 ## How it triggers
 
 In Claude Code, say one of:
 
-- "check setup"
-- "doctor"
-- "health check"
-- "am I ready"
-- "check dependencies"
-- "verify install"
-- "is everything installed"
+- "resume"
+- "where did we leave off"
+- "project status"
+- "status"
+- "catch me up"
+- "recap"
+- "where am I on this"
+
+For the deeper Claude-analyzed briefing:
+
+- "deep resume"
+- "smart resume"
+- "suggest what's next"
 
 Or run directly:
 
 ```bash
-bash ~/.claude/skills/check-setup/doctor.sh
+bash ~/.claude/skills/resume-project/resume.sh
+# Optional deeper briefing:
+bash ~/.claude/skills/resume-project/deep-resume.sh
 ```
 
-## What it checks
+## What it shows
 
-**Core (required):**
-- bash, git, gh, claude, curl, python3
+- **Last activity** — most recent commit, most recent iteration entry, current branch
+- **Progress** — tasks done / total, percentage
+- **Recently completed** — last 5 task-tagged commits with timestamps
+- **In progress / stuck** — failure entries from `progress.txt`, status of most recent iteration log
+- **Next up** — first 5 unchecked tasks from `tasks.md`
+- **Open PRs** — draft and non-draft PRs awaiting review (requires `gh`)
+- **Recent learnings** — last 3 dated entries from `LEARNINGS.md`
+- **Suggested next actions** — rule-based suggestions based on current state
 
-**Recommended (nice to have):**
-- timeout (GNU coreutils), jq, pnpm
+## Deterministic vs deep
 
-**Authentication:**
-- `gh auth status`
-- `claude /status` probe
+| | Deterministic (`resume.sh`) | Deep (`deep-resume.sh`) |
+|---|---|---|
+| Speed | Instant | ~30-60s |
+| Cost | Free | Uses Claude API calls |
+| Suggestions | Rule-based, predictable | Claude-judged, richer |
+| Good for | Daily "where am I" checks | Returning after weeks away, or when things feel stuck |
 
-**Installed skills** (in `~/.claude/skills/`):
-- bootstrap-project, validate-specs, check-setup, resume-project
+## What it will NOT do
 
-**Shell / OS compatibility:**
-- Detects Git Bash on Windows, macOS, Linux, WSL
-- Suggests `brew install coreutils` on macOS if `timeout` missing
-- Notes when running native Windows without WSL
+- Execute any action. This skill is strictly read-only.
+- Merge PRs, resume loops, or run Ralph. It tells you what you could do;
+  you decide what to do.
+- Modify any files. Even LEARNINGS.md and progress.txt are only read.
 
 ## Exit codes
 
 | Code | Meaning |
 |------|---------|
-| 0    | All checks passed. Ready to use the pipeline. |
-| 1    | Something required is missing. Pipeline will not work. |
-| 2    | Only recommended items missing. Pipeline works. |
-
-## What it will NOT do
-
-- Install anything automatically. The report lists install commands but
-  you run them. Installing system tools is out of scope for a skill.
-- Configure auth. The report tells you to run `gh auth login` etc.
-- Create repos, run Ralph, or touch your code. This skill is read-only.
+| 0 | Report produced successfully |
+| 3 | Not inside a claude-to-code project (missing `specs/tasks.md`) |
 
 ## Uninstall
 
 ```bash
-rm -rf ~/.claude/skills/check-setup
+rm -rf ~/.claude/skills/resume-project
 ```
