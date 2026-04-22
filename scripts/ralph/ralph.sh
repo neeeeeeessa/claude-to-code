@@ -25,6 +25,9 @@
 #   WEEKLY_STOP_PCT             stop if weekly usage % reaches this (default 75)
 #   AUTO_RESUME_ON_429          1 = pause+resume on rate limit (default 1)
 #   HEARTBEAT_MINUTES           send heartbeat every N minutes (default 0 = off)
+#   MAX_SILENT_MINUTES          alert if iteration log goes silent for N minutes
+#                               (preset default, 0 = disable). Does NOT kill —
+#                               only notifies so the operator can decide.
 #   TELEGRAM_BOT_TOKEN          enables notifications (see notify.sh)
 #   TELEGRAM_CHAT_ID            enables notifications (see notify.sh)
 
@@ -44,14 +47,17 @@ case "$PRESET" in
   cautious)
     : "${MAX_ITERATIONS:=20}"
     : "${MAX_CONSECUTIVE_FAILURES:=3}"
+    : "${MAX_SILENT_MINUTES:=15}"
     ;;
   standard)
     : "${MAX_ITERATIONS:=50}"
     : "${MAX_CONSECUTIVE_FAILURES:=5}"
+    : "${MAX_SILENT_MINUTES:=20}"
     ;;
   trusting)
     : "${MAX_ITERATIONS:=100}"
     : "${MAX_CONSECUTIVE_FAILURES:=0}"
+    : "${MAX_SILENT_MINUTES:=30}"
     ;;
   *)
     echo "error: unknown preset '$PRESET'. use: cautious | standard | trusting" >&2
@@ -69,6 +75,7 @@ SESSION_STOP_PCT="${SESSION_STOP_PCT:-85}"
 WEEKLY_STOP_PCT="${WEEKLY_STOP_PCT:-75}"
 AUTO_RESUME_ON_429="${AUTO_RESUME_ON_429:-1}"
 HEARTBEAT_MINUTES="${HEARTBEAT_MINUTES:-0}"
+MAX_SILENT_MINUTES="${MAX_SILENT_MINUTES:-0}"
 AGENT_CMD="${AGENT_CMD:-claude --dangerously-skip-permissions -p}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -196,6 +203,7 @@ echo "  session cap:          ${SESSION_STOP_PCT}%"
 echo "  weekly cap:           ${WEEKLY_STOP_PCT}%"
 echo "  auto-resume on 429:   $AUTO_RESUME_ON_429"
 echo "  heartbeat interval:   ${HEARTBEAT_MINUTES}m (0 = off)"
+echo "  silence alert after:  ${MAX_SILENT_MINUTES}m (0 = off, alert only, no kill)"
 echo "  logs:                 $LOG_DIR/"
 echo ""
 
@@ -225,6 +233,42 @@ maybe_heartbeat() {
       "${session_pct:-?}" "${weekly_pct:-?}"
     LAST_NOTIFY_TIME=$now
   fi
+}
+
+# --- Silence watcher ---------------------------------------------------------
+
+# Watches an iteration log file and pings the operator (via notify.sh) if
+# the log stops growing for longer than MAX_SILENT_MINUTES. Does NOT kill
+# the iteration — the process keeps running so the operator can decide
+# whether to let it ride (legitimate long tool call) or kill manually
+# (genuinely stuck subprocess, e.g. a hung Windows install prompt).
+#
+# Alerts fire at most once per iteration; the flag resets if the log grows
+# again so a stop-start pattern only pings the operator once per stall.
+#
+# Runs as a backgrounded subshell. Killed by trap on loop exit and
+# explicitly after each iteration (see below).
+silence_watcher() {
+  local log="$1" iter="$2" threshold_sec=$(( MAX_SILENT_MINUTES * 60 ))
+  local alerted=0
+  # Warm-up: give the log a moment to be created on slow filesystems.
+  sleep 5
+  while true; do
+    sleep 60
+    [[ -f "$log" ]] || continue
+    local mtime age
+    mtime=$(stat -c %Y "$log" 2>/dev/null || stat -f %m "$log" 2>/dev/null || echo 0)
+    age=$(( $(date +%s) - mtime ))
+    if (( age > threshold_sec )); then
+      if (( alerted == 0 )); then
+        notify stuck "$PROJECT_NAME" "$iter" "$((age/60))"
+        alerted=1
+      fi
+    else
+      # Log grew again — reset so a second stall would re-alert.
+      alerted=0
+    fi
+  done
 }
 
 # --- Pre-iteration limit check -----------------------------------------------
@@ -290,11 +334,24 @@ while [[ $iteration -lt $MAX_ITERATIONS ]]; do
     exit 3
   fi
 
+  # Start the silence watcher (if enabled) for this iteration.
+  watcher_pid=""
+  if (( MAX_SILENT_MINUTES > 0 )); then
+    silence_watcher "$log_file" "$iteration" &
+    watcher_pid=$!
+  fi
+
   # Fresh context: every iteration is a new agent invocation.
   set +e
   cat "$PROMPT_FILE" | $AGENT_CMD 2>&1 | tee "$log_file"
   agent_exit=${PIPESTATUS[1]}
   set -e
+
+  # Stop this iteration's watcher — a new one starts next iteration.
+  if [[ -n "$watcher_pid" ]]; then
+    kill "$watcher_pid" 2>/dev/null || true
+    wait "$watcher_pid" 2>/dev/null || true
+  fi
 
   # --- Handle rate limit in the response ---
   if detect_rate_limit "$log_file" >/dev/null 2>&1; then

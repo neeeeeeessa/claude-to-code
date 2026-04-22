@@ -11,6 +11,7 @@
 #   rate_limit_pause <project> <wait_minutes> <reason>
 #   rate_limit_resume <project>
 #   heartbeat <project> <runtime> <tasks_done> <tasks_total> <session_pct> <weekly_pct>
+#   stuck <project> <iteration> <silent_minutes>
 #   exit_success <project> <runtime> <tasks_done> <tasks_total> <repo_url>
 #   exit_stopped <project> <runtime> <tasks_done> <tasks_total> <reason> <repo_url>
 #
@@ -91,6 +92,12 @@ resumed after rate limit"
     MESSAGE="⏳ ${project} · ${runtime}
 ${done}/${total} done
 session ${session_pct}% · weekly ${weekly_pct}%"
+    ;;
+  stuck)
+    project="$1"; iter="$2"; silent_min="$3"
+    MESSAGE="🔇 ${project}
+iter ${iter} log silent for ${silent_min}m
+process still running — check and kill manually if stuck"
     ;;
   exit_success)
     project="$1"; runtime="$2"; done="$3"; total="$4"; repo="${5:-}"
