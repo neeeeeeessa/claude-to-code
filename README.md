@@ -681,6 +681,7 @@ Override anything. Secrets go in `.env.local` (gitignored); see `.env.local.exam
 | `WEEKLY_STOP_PCT` | `75` | Stop if Claude weekly usage ≥ this % (Claude Code only) |
 | `AUTO_RESUME_ON_429` | `1` | `1` = pause and resume on rate limit; `0` = exit |
 | `HEARTBEAT_MINUTES` | `0` | Send a status Telegram every N minutes (`0` = off) |
+| `MAX_SILENT_MINUTES` | preset-dependent | Alert via Telegram if an iteration log stops growing for N minutes. Does **not** kill the process — only notifies, so you can decide. `0` disables. Preset defaults: `cautious=15`, `standard=20`, `trusting=30`. |
 | `TELEGRAM_BOT_TOKEN` | — | Enables Telegram notifications (see `.env.local.example`) |
 | `TELEGRAM_CHAT_ID` | — | Required with `TELEGRAM_BOT_TOKEN` |
 
@@ -714,6 +715,7 @@ Events that trigger notifications:
 - **Rate limit pause** — which cap was hit and estimated resume time
 - **Rate limit resume** — when the loop picks back up
 - **Heartbeat** (optional) — every `HEARTBEAT_MINUTES`, compact status
+- **Stuck** — iteration log has been silent for `MAX_SILENT_MINUTES`. Alert only; the process keeps running so the operator can decide whether it's a legitimate long tool call or a genuinely hung subprocess (common failure on Windows when a child process hits a firewall, UAC, or Microsoft Store prompt).
 - **Exit** — success, consecutive failures, max iterations, or rate-limit-stop
 
 Setup walkthrough is in `.env.local.example`. Use a **dedicated** bot — don't
